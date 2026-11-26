@@ -60,7 +60,7 @@ class Main extends Mod {
 
 	override public function ready(context:Context):Void {
 		try {
-			panel = new Panel(context);
+			panel = new Panel(context, logOnce);
 			panel.setOnTabSelected(selectTab);
 			ctx.overlay.addChild(panel);
 			panel.setShown(shown);

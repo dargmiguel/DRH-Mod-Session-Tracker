@@ -2,7 +2,7 @@
   "id": "session_tracker",
   "name": "Session Tracker",
   "description": "This launch and the day in two tabs, with a week/month chart of earlier days and the items each run added.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "author": "Miguel D",
   "api": "1.5",
   "entry": "Main",

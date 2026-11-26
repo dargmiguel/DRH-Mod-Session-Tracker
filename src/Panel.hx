@@ -19,10 +19,13 @@ import openfl.text.TextFormatAlign;
  * decides which one is on, and this only reports a click.
  */
 class Panel extends Sprite {
+	/** The tab of this launch's totals, from zero when the game opened: the first tab, and the one on at start. */
+	public static inline final TAB_SESSION = 0;
 	/** The tab of the day's totals, the ones kept in the file. */
-	public static inline final TAB_DAY = 0;
-	/** The tab of this launch's totals, from zero when the game opened. */
-	public static inline final TAB_SESSION = 1;
+	public static inline final TAB_DAY = 1;
+	/** The calendar button that opens the chart. */
+	public static inline final ZONE_CHART = 2;
+	public static inline final ZONE_NONE = -1;
 
 	static inline final WIDTH = 246.;
 	static inline final PAD = 10.;
@@ -30,7 +33,11 @@ class Panel extends Sprite {
 	static inline final HEADER = 22.;
 	static inline final TAB_ROW = 16.;
 	static inline final TAB_WIDTH = 64.;
+	static inline final CHART_X = WIDTH - PAD - 44;
+	static inline final CHART_WIDTH = 44.;
 	static inline final ITEM_LINES = 3;
+
+	static final TAB_NAMES:Array<String> = ["SESSION", "TODAY"];
 
 	static inline final COL_TEXT = 0xF2EEE4;
 	static inline final COL_MUTED = 0x9C978C;
@@ -56,6 +63,10 @@ class Panel extends Sprite {
 	var chart:Chart;
 	var chartToggle:TextField;
 	var chartOpen:Bool = false;
+	/** How many item lines the last run filled: the panel keeps its height to them, not to the maximum. */
+	var visibleItems:Int = 0;
+	/** The panel's own log, for the clicks the QA would otherwise have to guess. */
+	var log:Null<String->Void>;
 	/** The day's totals as of the last refresh, so the chart has data the moment it opens. */
 	var lastDaily:Null<SessionData>;
 	var labelFields:Array<TextField> = [];
@@ -72,35 +83,26 @@ class Panel extends Sprite {
 	var grabX:Float = 0.;
 	var grabY:Float = 0.;
 
-	public function new(ctx:Context) {
+	public function new(ctx:Context, log:String->Void = null) {
 		super();
 		this.ctx = ctx;
+		this.log = log;
+		// The panel is the only mouse target: it tells its controls apart by coordinates, as the minimap does,
+		// because the text fields of the overlay do not take clicks reliably.
+		mouseChildren = false;
 		title = makeField(12, COL_TITLE, true, TextFormatAlign.LEFT);
 		title.text = "SESSION TRACKER";
 		addChild(title);
 		day = makeField(11, COL_MUTED, false, TextFormatAlign.RIGHT);
 		addChild(day);
-		var names:Array<String> = ["TODAY", "SESSION"];
-		for (index in 0...names.length) {
+		for (index in 0...TAB_NAMES.length) {
 			var field = makeField(10, COL_MUTED, true, TextFormatAlign.LEFT);
-			field.text = names[index];
-			field.mouseEnabled = true;
-			field.addEventListener(MouseEvent.CLICK, function(event:MouseEvent) {
-				if (event != null)
-					event.stopPropagation();
-				selectTab(index);
-			});
+			field.text = TAB_NAMES[index];
 			tabs.push(field);
 			addChild(field);
 		}
 		chartToggle = makeField(10, COL_MUTED, true, TextFormatAlign.RIGHT);
 		chartToggle.text = "CHART";
-		chartToggle.mouseEnabled = true;
-		chartToggle.addEventListener(MouseEvent.CLICK, function(event:MouseEvent) {
-			if (event != null)
-				event.stopPropagation();
-			toggleChart();
-		});
 		addChild(chartToggle);
 		chart = new Chart(WIDTH - PAD * 2);
 		chart.visible = false;
@@ -126,6 +128,7 @@ class Panel extends Sprite {
 		}
 		addChildAt(background, 0);
 		addEventListener(MouseEvent.MOUSE_DOWN, press);
+		addEventListener(MouseEvent.CLICK, clicked);
 		layout();
 	}
 
@@ -180,13 +183,13 @@ class Panel extends Sprite {
 				itemFields[i].visible = false;
 			}
 		}
+		visibleItems = items.length;
 		layout();
 	}
 
 	public function setShown(value:Bool):Void {
 		visible = value;
 		mouseEnabled = value;
-		mouseChildren = value;
 		if (value)
 			place();
 	}
@@ -207,6 +210,7 @@ class Panel extends Sprite {
 	public function destroy():Void {
 		release(null);
 		removeEventListener(MouseEvent.MOUSE_DOWN, press);
+		removeEventListener(MouseEvent.CLICK, clicked);
 		if (parent != null)
 			parent.removeChild(this);
 	}
@@ -240,9 +244,9 @@ class Panel extends Sprite {
 			tabs[i].y = HEADER;
 			tabs[i].width = TAB_WIDTH;
 		}
-		chartToggle.x = WIDTH - PAD - 44;
+		chartToggle.x = CHART_X;
 		chartToggle.y = HEADER;
-		chartToggle.width = 44;
+		chartToggle.width = CHART_WIDTH;
 		y += TAB_ROW;
 		for (i in 0...labelFields.length) {
 			labelFields[i].x = PAD;
@@ -260,7 +264,11 @@ class Panel extends Sprite {
 		sectionValue.y = y;
 		sectionValue.width = WIDTH - PAD * 2;
 		y += LINE;
-		for (i in 0...itemFields.length) {
+		for (i in 0...ITEM_LINES) {
+			if (i >= visibleItems) {
+				itemFields[i].visible = false;
+				continue;
+			}
 			itemFields[i].x = PAD;
 			itemFields[i].y = y;
 			itemFields[i].width = WIDTH - PAD * 2;
@@ -292,7 +300,11 @@ class Panel extends Sprite {
 	}
 
 	function press(event:MouseEvent):Void {
-		if (event == null || stage == null || event.localY > HEADER)
+		if (event == null)
+			return;
+		// The panel keeps the click from the game under it, dragged or not.
+		event.stopPropagation();
+		if (stage == null || event.localY > HEADER)
 			return;
 		dragging = true;
 		grabX = event.stageX - x;
@@ -300,7 +312,40 @@ class Panel extends Sprite {
 		stage.addEventListener(MouseEvent.MOUSE_MOVE, move);
 		stage.addEventListener(MouseEvent.MOUSE_UP, release);
 		stage.addEventListener(Event.DEACTIVATE, release);
+	}
+
+	/** A click anywhere on the panel: a tab, the calendar button or the chart's own caption. */
+	function clicked(event:MouseEvent):Void {
+		if (event == null)
+			return;
 		event.stopPropagation();
+		var zone = zoneAt(event.localX, event.localY);
+		if (zone >= 0 && zone < tabs.length) {
+			selectTab(zone);
+			return;
+		}
+		if (zone == ZONE_CHART) {
+			toggleChart();
+			return;
+		}
+		if (chartOpen && chart != null && chart.visible)
+			chart.clickAt(event.localX - chart.x, event.localY - chart.y);
+	}
+
+	/** The control at a point of the panel: a tab's index, `ZONE_CHART`, or `ZONE_NONE`. */
+	public static function zoneAt(x:Float, y:Float):Int {
+		if (y < HEADER || y > HEADER + TAB_ROW)
+			return ZONE_NONE;
+		if (x >= CHART_X && x <= CHART_X + CHART_WIDTH)
+			return ZONE_CHART;
+		if (x >= PAD && x < PAD + TAB_WIDTH * TAB_NAMES.length)
+			return Std.int((x - PAD) / TAB_WIDTH);
+		return ZONE_NONE;
+	}
+
+	function say(message:String):Void {
+		if (log != null)
+			log(message);
 	}
 
 	function move(event:MouseEvent):Void {
@@ -379,12 +424,20 @@ class Panel extends Sprite {
 		return formatInt(Std.int(data.gold / data.runs)) + " g  " + formatInt(Std.int(data.xp / data.runs)) + " xp";
 	}
 
+	/** The height the panel draws itself at: it follows the item lines and the chart. */
+	public var contentHeight(get, never):Float;
+
+	function get_contentHeight():Float {
+		return panelHeight;
+	}
+
 	/** The calendar button: the chart opens under the items and closes again. */
-	function toggleChart():Void {
+	public function toggleChart():Void {
 		chartOpen = !chartOpen;
 		chart.visible = chartOpen;
 		if (chartOpen && lastDaily != null)
 			chart.setData(lastDaily.history, lastDaily);
+		say("chart " + (chartOpen ? "open" : "closed"));
 		layout();
 	}
 
@@ -392,6 +445,7 @@ class Panel extends Sprite {
 	public function selectTab(index:Int):Void {
 		if (index < 0 || index >= tabs.length)
 			return;
+		say("tab " + index);
 		if (onSelectTab != null)
 			onSelectTab(index);
 	}

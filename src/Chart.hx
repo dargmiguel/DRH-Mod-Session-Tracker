@@ -2,7 +2,6 @@ package mods.session_tracker;
 
 import openfl.display.Shape;
 import openfl.display.Sprite;
-import openfl.events.MouseEvent;
 import openfl.text.TextField;
 import openfl.text.TextFieldAutoSize;
 import openfl.text.TextFormat;
@@ -22,11 +21,19 @@ class Chart extends Sprite {
 	public static inline final METRIC_GOLD = 0;
 	public static inline final METRIC_XP = 1;
 	public static inline final METRIC_CHESTS = 2;
+	/** The caption's controls, for the panel's coordinate hit test. */
+	public static inline final ZONE_METRIC = 0;
+	public static inline final ZONE_NONE = -1;
 
 	static final METRIC_NAMES:Array<String> = ["GOLD", "XP", "CHESTS"];
 	static final SPANS:Array<Int> = [7, 30, 60];
 	static final RANGE_NAMES:Array<String> = ["7D", "30D", "ALL"];
 	static inline final CAPTION = 14.;
+	static inline final METRIC_W = 52.;
+	static inline final RANGE_X0 = 56.;
+	static inline final RANGE_W = 32.;
+	static inline final RANGE_STEP = 36.;
+	static inline final DOT = 1.8;
 
 	static inline final COL_LINE = 0xFFD45E;
 	static inline final COL_GRID = 0x3E444D;
@@ -40,6 +47,7 @@ class Chart extends Sprite {
 	var line:Shape = new Shape();
 	var metricField:TextField;
 	var rangeFields:Array<TextField> = [];
+	var empty:TextField;
 	var history:Array<DayTotals> = [];
 	var today:Null<SessionData>;
 
@@ -47,22 +55,16 @@ class Chart extends Sprite {
 		super();
 		this.plotWidth = plotWidth;
 		metricField = field(METRIC_NAMES[metric], TextFormatAlign.LEFT);
-		metricField.addEventListener(MouseEvent.CLICK, function(event:MouseEvent) {
-			if (event != null)
-				event.stopPropagation();
-			nextMetric();
-		});
 		addChild(metricField);
 		for (index in 0...RANGE_NAMES.length) {
 			var pick = field(RANGE_NAMES[index], TextFormatAlign.LEFT);
-			pick.addEventListener(MouseEvent.CLICK, function(event:MouseEvent) {
-				if (event != null)
-					event.stopPropagation();
-				selectRange(index);
-			});
 			rangeFields.push(pick);
 			addChild(pick);
 		}
+		empty = field("no days yet", TextFormatAlign.LEFT);
+		empty.y = CAPTION + 10;
+		empty.visible = false;
+		addChild(empty);
 		addChild(grid);
 		addChild(line);
 		layout();
@@ -132,6 +134,29 @@ class Chart extends Sprite {
 		return metric == METRIC_XP ? xp : (metric == METRIC_CHESTS ? chests : gold);
 	}
 
+	/** The caption control at a point of the chart: `ZONE_METRIC`, a range index plus one, or `ZONE_NONE`. */
+	public static function zoneAt(x:Float, y:Float):Int {
+		if (y < 0 || y > CAPTION)
+			return ZONE_NONE;
+		if (x >= 0 && x <= METRIC_W)
+			return ZONE_METRIC;
+		for (index in 0...RANGE_NAMES.length) {
+			var left = RANGE_X0 + RANGE_STEP * index;
+			if (x >= left && x <= left + RANGE_W)
+				return index + 1;
+		}
+		return ZONE_NONE;
+	}
+
+	/** A click of the panel, in the chart's own coordinates. */
+	public function clickAt(x:Float, y:Float):Void {
+		var zone = zoneAt(x, y);
+		if (zone == ZONE_METRIC)
+			nextMetric();
+		else if (zone > 0)
+			selectRange(zone - 1);
+	}
+
 	function nextMetric():Void {
 		metric = (metric + 1) % METRIC_NAMES.length;
 		var text = METRIC_NAMES[metric];
@@ -157,6 +182,13 @@ class Chart extends Sprite {
 		grid.graphics.lineStyle(1, COL_GRID, 0.6);
 		grid.graphics.moveTo(0, base);
 		grid.graphics.lineTo(plotWidth, base);
+		var plotted = false;
+		for (point in spans)
+			if (point != null)
+				plotted = true;
+		empty.visible = !plotted;
+		if (!plotted)
+			return;
 		line.graphics.lineStyle(1.5, COL_LINE, 1);
 		var started = false;
 		for (point in spans) {
@@ -171,18 +203,22 @@ class Chart extends Sprite {
 				line.graphics.moveTo(point.x, y);
 			started = true;
 		}
+		// A dot per day: a single day is a dot, not an empty plot.
+		line.graphics.beginFill(COL_LINE, 1);
+		for (point in spans)
+			if (point != null)
+				line.graphics.drawCircle(point.x, CAPTION + point.y, DOT);
+		line.graphics.endFill();
 	}
 
 	function layout():Void {
 		metricField.x = 0;
 		metricField.y = 0;
-		metricField.width = 52;
-		var x = 56.;
+		metricField.width = METRIC_W;
 		for (index in 0...rangeFields.length) {
-			rangeFields[index].x = x;
+			rangeFields[index].x = RANGE_X0 + RANGE_STEP * index;
 			rangeFields[index].y = 0;
-			rangeFields[index].width = 32;
-			x += 36;
+			rangeFields[index].width = RANGE_W;
 		}
 		applyFormats();
 	}
@@ -199,7 +235,7 @@ class Chart extends Sprite {
 		var field = new TextField();
 		field.autoSize = TextFieldAutoSize.NONE;
 		field.selectable = false;
-		field.mouseEnabled = true;
+		field.mouseEnabled = false;
 		field.multiline = false;
 		field.wordWrap = false;
 		field.defaultTextFormat = format;
