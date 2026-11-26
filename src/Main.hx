@@ -41,10 +41,11 @@ class Main extends Mod {
 		store = new SessionStore(context.data, log);
 		data = store.load();
 		tracker = new Tracker(context, data);
-		context.keys.action("togglePanel", "Session panel", "Show or hide the session tracker panel.", Keyboard.F7)
+		// F4 and F3: F6, F7 and F9 are taken by Weapon Rater and Weapon Lock, and a key binds once.
+		context.keys.action("togglePanel", "Session panel", "Show or hide the session tracker panel.", Keyboard.F4)
 			.onPress(togglePanel);
 		context.keys.action("resetSession", "Reset session", "Clear today's totals; the days before stay in the file.",
-			Keyboard.F6).onPress(resetSession);
+			Keyboard.F3).onPress(resetSession);
 		subscriptions.push(context.onFloorEnter(onFloorEnter));
 		subscriptions.push(context.onTownEnter(onTownEnter));
 		subscribeCore();
@@ -52,11 +53,16 @@ class Main extends Mod {
 	}
 
 	override public function ready(context:Context):Void {
-		panel = new Panel(context);
-		ctx.overlay.addChild(panel);
-		panel.setShown(shown);
-		ctx.overlay.addEventListener(Event.ENTER_FRAME, onFrame);
-		refresh();
+		try {
+			panel = new Panel(context);
+			ctx.overlay.addChild(panel);
+			panel.setShown(shown);
+			ctx.overlay.addEventListener(Event.ENTER_FRAME, onFrame);
+			refresh();
+		} catch (error:Dynamic) {
+			panel = null;
+			log("panel unavailable, counters keep running: " + Std.string(error));
+		}
 	}
 
 	override public function dispose():Void {
@@ -74,7 +80,11 @@ class Main extends Mod {
 			log("dispose overlay: " + Std.string(error));
 		}
 		if (panel != null) {
-			panel.destroy();
+			try {
+				panel.destroy();
+			} catch (error:Dynamic) {
+				log("panel dispose: " + Std.string(error));
+			}
 			panel = null;
 		}
 		for (subscription in subscriptions)
@@ -175,8 +185,14 @@ class Main extends Mod {
 
 	function togglePanel():Void {
 		shown = !shown;
-		if (panel != null)
+		if (panel == null)
+			return;
+		try {
 			panel.setShown(shown);
+			refresh();
+		} catch (error:Dynamic) {
+			logOnce("panel toggle: " + Std.string(error));
+		}
 	}
 
 	function resetSession():Void {
@@ -193,8 +209,13 @@ class Main extends Mod {
 	}
 
 	function refresh():Void {
-		if (panel != null && panel.visible)
+		if (panel == null || !panel.visible)
+			return;
+		try {
 			panel.refresh(data, tracker);
+		} catch (error:Dynamic) {
+			logOnce("panel refresh: " + Std.string(error));
+		}
 	}
 
 	function subscribeCore():Void {

@@ -5,7 +5,7 @@ A [Dungeon Rampage Haxe](https://github.com/Tutez64/Dungeon-Rampage-Haxe) mod th
 <!-- drh:show -->
 A small panel in the bottom-left corner of the screen shows the day's totals: gold and XP earned inside dungeons, chests opened, runs, floors, time played and the average gold and XP of a run, plus the run in progress or the last one and the items it added to your inventory, with legendaries in orange.
 
-- **F7** shows or hides the panel. **F6** clears the day's totals (the previous days stay in the file).
+- **F4** shows or hides the panel. **F3** clears the day's totals (the previous days stay in the file). F6, F7 and F9 are left to other mods that use them.
 - Drag the panel by its header to move it.
 - The totals are kept in `session.json` in the mod's data folder. A new calendar day starts a new session and keeps the earlier ones as history.
 
@@ -13,7 +13,7 @@ Gold counts only what was earned inside the dungeon: the balance is sampled when
 
 Item names come from your inventory when you are back in town, compared with it when the dungeon started. Weapons are compared by kind, power, level and rarity, because the API has no per-weapon id yet: two identical weapons still show as a count of two. Items sold or opened outside the run are not subtracted. The panel starts in the bottom-left corner so it does not cover the Dungeon Minimap panel, which defaults to the top-right; drag it for another spot, the position is not remembered between starts.
 
-Both keys are set in Settings → Controls, where they can be rebound. Tested with DRH 18 and Mod API 1.5.0.
+Both keys are set in Settings → Controls, where they can be rebound if another mod or the game wants them. Tested with DRH 18 and Mod API 1.5.0.
 
 Gold and XP capture reads the game's own objects through `context.core`, so a DRH update can break those counters; the panel and the rest keep working without them.
 <!-- /drh:show -->

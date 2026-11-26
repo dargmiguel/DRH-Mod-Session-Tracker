@@ -8,6 +8,7 @@ import openfl.events.MouseEvent;
 import openfl.text.TextField;
 import openfl.text.TextFieldAutoSize;
 import openfl.text.TextFormat;
+import openfl.text.TextFormatAlign;
 
 /**
  * The overlay panel: the day's totals, the run in progress or the last one, and the last run's new items.
@@ -57,29 +58,27 @@ class Panel extends Sprite {
 	public function new(ctx:Context) {
 		super();
 		this.ctx = ctx;
-		title = makeField(12, COL_TITLE, true);
+		title = makeField(12, COL_TITLE, true, TextFormatAlign.LEFT);
 		title.text = "SESSION TRACKER";
 		addChild(title);
-		day = makeField(11, COL_MUTED, false);
-		day.textAlign = openfl.text.TextFormatAlign.RIGHT;
+		day = makeField(11, COL_MUTED, false, TextFormatAlign.RIGHT);
 		addChild(day);
 		var colors:Array<Int> = [COL_GOLD, COL_XP, COL_CHEST, COL_TEXT, COL_TEXT, COL_TEXT, COL_MUTED];
 		for (i in 0...LABELS.length) {
-			var label = makeField(12, COL_MUTED, false);
+			var label = makeField(12, COL_MUTED, false, TextFormatAlign.LEFT);
 			label.text = LABELS[i];
 			labelFields.push(label);
 			addChild(label);
-			var value = makeField(12, colors[i], true);
-			value.textAlign = openfl.text.TextFormatAlign.RIGHT;
+			var value = makeField(12, colors[i], true, TextFormatAlign.RIGHT);
 			valueFields.push(value);
 			addChild(value);
 		}
-		sectionTitle = makeField(10, COL_MUTED, true);
+		sectionTitle = makeField(10, COL_MUTED, true, TextFormatAlign.LEFT);
 		addChild(sectionTitle);
-		sectionValue = makeField(11, COL_TEXT, false);
+		sectionValue = makeField(11, COL_TEXT, false, TextFormatAlign.LEFT);
 		addChild(sectionValue);
 		for (index in 0...ITEM_LINES) {
-			var field = makeField(11, COL_ITEM, false);
+			var field = makeField(11, COL_ITEM, false, TextFormatAlign.LEFT);
 			itemFields.push(field);
 			addChild(field);
 		}
@@ -260,14 +259,17 @@ class Panel extends Sprite {
 		stage.removeEventListener(Event.DEACTIVATE, release);
 	}
 
-	function makeField(size:Int, color:Int, bold:Bool):TextField {
+	/** The format carries the alignment: `TextField` has no `textAlign` of its own. */
+	function makeField(size:Int, color:Int, bold:Bool, align:TextFormatAlign):TextField {
+		var format = new TextFormat("Arial", size, color, bold);
+		format.align = align;
 		var field = new TextField();
 		field.autoSize = TextFieldAutoSize.NONE;
 		field.selectable = false;
 		field.mouseEnabled = false;
 		field.multiline = false;
 		field.wordWrap = false;
-		field.defaultTextFormat = new TextFormat("Arial", size, color, bold);
+		field.defaultTextFormat = format;
 		return field;
 	}
 
