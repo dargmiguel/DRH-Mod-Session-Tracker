@@ -1,8 +1,8 @@
 {
   "id": "session_tracker",
   "name": "Session Tracker",
-  "description": "Daily or manual session totals of gold, XP, chests, runs, floors and time, plus new inventory items per run.",
-  "version": "0.1.2",
+  "description": "Two tabs: the day's and this launch's gold, XP, chests, runs, floors and time, plus new inventory items per run.",
+  "version": "0.1.3",
   "author": "Miguel D",
   "api": "1.5",
   "entry": "Main",

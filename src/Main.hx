@@ -14,10 +14,10 @@ import distributedObjects.DistributedDungeonSummary;
 import distributedObjects.PlayerGameObjectOwner;
 
 /**
- * Session Tracker: what a day, or a manual session, added up to, kept across runs in `context.data`.
+ * Session Tracker: the day's totals and this launch's, in one panel with two tabs.
  *
- * The period is an option in the game's settings: `daily` ends the totals at midnight and keeps the earlier days
- * as history, `session` ends them only at the reset key. Switching moves the totals, it does not restart them.
+ * The day tab is kept in `context.data`, ends at midnight and keeps the earlier days as history; the session tab
+ * starts at zero every time the game opens and is never written to the file. Both are fed by the same runs.
  *
  * Gold and XP come from the live game through `context.core`, so the mod is `extends`; the `api` alone has the
  * account's balance but no per-run gain. Every game object read through the core is guarded, so a DRH update that
@@ -36,41 +36,32 @@ class Main extends Mod {
 	var coreSubscriptions:Array<ModSubscription> = [];
 	var nextTick:Int = 0;
 	var shown:Bool = true;
+	/** Which tab the panel shows: the day's totals or this launch's. */
+	var tab:Int = Panel.TAB_DAY;
 	var logged:Map<String, Bool> = new Map();
 	var loggingBroken:Bool = false;
 
 	override public function init(context:Context):Void {
 		ctx = context;
-		var preferred = SessionData.DAILY;
-		try {
-			var option = context.settings.choice("period", "Session period", "", [
-				{value: SessionData.DAILY, label: "Daily"},
-				{value: SessionData.SESSION, label: "Manual"}
-			], SessionData.DAILY);
-			preferred = option.value;
-			subscriptions.push(option.onChange(changePeriod));
-		} catch (error:Dynamic) {
-			log("session period option unavailable, staying daily: " + Std.string(error));
-		}
 		store = new SessionStore(context.data, log);
-		data = store.load(preferred);
+		data = store.load();
 		tracker = new Tracker(context, data);
 		// Ctrl+Shift+T, as the Dungeon Minimap uses Ctrl+Shift+M. F6, F7 and F9 belong to Weapon Rater and
 		// Weapon Lock, and a key binds once, so the reset keeps F3.
 		context.keys.action("togglePanel", "Session panel", "Show or hide the session tracker panel.", Keyboard.T, true, true)
 			.onPress(togglePanel);
-		context.keys.action("resetSession", "Reset session",
-			"Clear the totals; in a manual session this one ends here and a new one starts.", Keyboard.F3).onPress(resetSession);
+		context.keys.action("resetSession", "Reset session", "Clear the totals of the tab on screen.", Keyboard.F3)
+			.onPress(resetSession);
 		subscriptions.push(context.onFloorEnter(onFloorEnter));
 		subscriptions.push(context.onTownEnter(onTownEnter));
 		subscribeCore();
-		log((data.isSession() ? "session since " + data.since : "day " + data.day) + ": " + data.runs + " runs, " + data.gold
-			+ " gold, " + data.xp + " xp");
+		log("day " + data.day + ": " + data.runs + " runs, " + data.gold + " gold, " + data.xp + " xp");
 	}
 
 	override public function ready(context:Context):Void {
 		try {
 			panel = new Panel(context);
+			panel.setOnTabSelected(selectTab);
 			ctx.overlay.addChild(panel);
 			panel.setShown(shown);
 			ctx.overlay.addEventListener(Event.ENTER_FRAME, onFrame);
@@ -123,11 +114,8 @@ class Main extends Mod {
 		}
 	}
 
-	/** In daily mode a session that runs past midnight ends there: the finished day goes to the history. */
+	/** A session that runs past midnight ends there: the finished day goes to the history. */
 	function checkDay():Void {
-		// A manual session runs past midnight; the daily one ends there.
-		if (data.isSession())
-			return;
 		var today = SessionData.localDay();
 		if (today == data.day)
 			return;
@@ -214,47 +202,35 @@ class Main extends Mod {
 		}
 	}
 
+	/** The reset key clears the tab on screen: the day is saved empty, the session is only cleared. */
 	function resetSession():Void {
 		try {
-			var today = SessionData.localDay();
-			if (data.isSession())
-				data.restartSession(today);
-			else
+			if (tab == Panel.TAB_SESSION)
+				tracker.session.resetToday();
+			else {
 				data.resetToday();
+				store.save(data);
+			}
 			tracker.restartRun();
 			snapshot = InventoryDiff.take(ctx, logOnce);
-			store.save(data);
 			refresh();
-			log(data.isSession() ? "session restarted " + today : "session reset for " + data.day);
+			log(tab == Panel.TAB_SESSION ? "session cleared" : "day cleared for " + data.day);
 		} catch (error:Dynamic) {
 			log("reset: " + Std.string(error));
 		}
 	}
 
-	/** The player's choice in the menu: the totals so far are moved, not thrown away. */
-	function changePeriod(value:String):Void {
-		try {
-			var today = SessionData.localDay();
-			if (value == SessionData.SESSION)
-				data.beginSession(data.day == "" ? today : data.day);
-			else {
-				data.endSession(today);
-				if (data.day != today)
-					data.startDay(today);
-			}
-			store.save(data);
-			refresh();
-			log("period now " + data.period);
-		} catch (error:Dynamic) {
-			log("period change: " + Std.string(error));
-		}
+	/** The panel reported a tab click: that tab is the one on screen from now on. */
+	function selectTab(index:Int):Void {
+		tab = index == Panel.TAB_SESSION ? Panel.TAB_SESSION : Panel.TAB_DAY;
+		refresh();
 	}
 
 	function refresh():Void {
 		if (panel == null || !panel.visible)
 			return;
 		try {
-			panel.refresh(data, tracker);
+			panel.refresh(data, tracker.session, tracker, tab);
 		} catch (error:Dynamic) {
 			logOnce("panel refresh: " + Std.string(error));
 		}

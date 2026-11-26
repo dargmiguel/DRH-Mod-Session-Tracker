@@ -7,12 +7,15 @@ import distributedObjects.Area;
 import distributedObjects.DistributedDungeonFloor;
 
 /**
- * The arithmetic of one dungeon run and of the day.
+ * The arithmetic of one dungeon run, of the day and of the launch session.
  *
  * Gold is what the account balance gained inside the run: the server sends the balance to the live player object,
  * and the baseline is the balance at the first floor, so what was spent in town before the run is not counted. XP
  * is the end-of-dungeon report's total when the game sent one, and the XP doobers picked up otherwise. Chests are
  * the treasure doobers the party collected, as the dungeon area counts them.
+ *
+ * Every run feeds both sets: the day's totals, which are kept in the file, and the launch session's, which start
+ * at zero when the game opens and end with it.
  *
  * Every game object read here comes from beyond the `api`, so the readers are guarded: a DRH update that changes
  * one costs the counter, not the game. A balance of `NO_BALANCE` means "not known yet".
@@ -22,6 +25,8 @@ class Tracker {
 
 	var ctx:Context;
 	public var data:SessionData;
+	/** The totals of this launch, from zero when the game opened; never written to the file. */
+	public var session:SessionData;
 	public var run:Null<RunRecord> = null;
 
 	var startBalance:Int = NO_BALANCE;
@@ -35,6 +40,8 @@ class Tracker {
 	public function new(ctx:Context, data:SessionData) {
 		this.ctx = ctx;
 		this.data = data;
+		this.session = new SessionData();
+		this.session.startDay(SessionData.localDay());
 	}
 
 	public function active():Bool {
@@ -81,6 +88,13 @@ class Tracker {
 		data.ms += record.ms;
 		data.runs += 1;
 		data.last = record;
+		session.gold += record.gold;
+		session.xp += record.xp;
+		session.chests += record.chests;
+		session.floors += record.floors;
+		session.ms += record.ms;
+		session.runs += 1;
+		session.last = record;
 		startBalance = NO_BALANCE;
 		endBalance = NO_BALANCE;
 		return record;
@@ -151,11 +165,13 @@ class Tracker {
 			record.chests = opened;
 	}
 
+	/** Items the run added: they go to both sets, and to the run's record, which the two share. */
 	public function addItems(items:Array<ItemEntry>):Void {
 		if (items == null || items.length == 0)
 			return;
 		for (item in items) {
 			data.addItem(item);
+			session.addItem(item);
 			var record = data.last;
 			if (record != null)
 				record.items.push(item);

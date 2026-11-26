@@ -11,16 +11,25 @@ import openfl.text.TextFormat;
 import openfl.text.TextFormatAlign;
 
 /**
- * The overlay panel: the day's totals, the run in progress or the last one, and the last run's new items.
+ * The overlay panel: the day's totals or this launch's, the run in progress or the last one, and the last run's
+ * new items.
  *
  * Drag it by its header. Its default corner is the bottom left, where the Dungeon Minimap's panel (top right by
- * default) does not reach.
+ * default) does not reach. The two tabs of the header row switch between the day and the session; the owner
+ * decides which one is on, and this only reports a click.
  */
 class Panel extends Sprite {
+	/** The tab of the day's totals, the ones kept in the file. */
+	public static inline final TAB_DAY = 0;
+	/** The tab of this launch's totals, from zero when the game opened. */
+	public static inline final TAB_SESSION = 1;
+
 	static inline final WIDTH = 246.;
 	static inline final PAD = 10.;
 	static inline final LINE = 15.;
 	static inline final HEADER = 22.;
+	static inline final TAB_ROW = 16.;
+	static inline final TAB_WIDTH = 64.;
 	static inline final ITEM_LINES = 3;
 
 	static inline final COL_TEXT = 0xF2EEE4;
@@ -41,6 +50,9 @@ class Panel extends Sprite {
 	var background:Shape = new Shape();
 	var title:TextField;
 	var day:TextField;
+	var tabs:Array<TextField> = [];
+	var onSelectTab:Null<Int->Void>;
+	var styledTab:Int = -1;
 	var labelFields:Array<TextField> = [];
 	var valueFields:Array<TextField> = [];
 	var sectionTitle:TextField;
@@ -63,6 +75,19 @@ class Panel extends Sprite {
 		addChild(title);
 		day = makeField(11, COL_MUTED, false, TextFormatAlign.RIGHT);
 		addChild(day);
+		var names:Array<String> = ["TODAY", "SESSION"];
+		for (index in 0...names.length) {
+			var field = makeField(10, COL_MUTED, true, TextFormatAlign.LEFT);
+			field.text = names[index];
+			field.mouseEnabled = true;
+			field.addEventListener(MouseEvent.CLICK, function(event:MouseEvent) {
+				if (event != null)
+					event.stopPropagation();
+				selectTab(index);
+			});
+			tabs.push(field);
+			addChild(field);
+		}
 		var colors:Array<Int> = [COL_GOLD, COL_XP, COL_CHEST, COL_TEXT, COL_TEXT, COL_TEXT, COL_MUTED];
 		for (i in 0...LABELS.length) {
 			var label = makeField(12, COL_MUTED, false, TextFormatAlign.LEFT);
@@ -87,12 +112,14 @@ class Panel extends Sprite {
 		layout();
 	}
 
-	/** Pulls what it shows from the day's data and the live run. */
-	public function refresh(data:SessionData, tracker:Tracker):Void {
-		var next = buildSignature(data, tracker);
+	/** Pulls what it shows from the tab's totals and the live run. */
+	public function refresh(daily:SessionData, session:SessionData, tracker:Tracker, tab:Int):Void {
+		var data = tab == TAB_SESSION ? session : daily;
+		var next = buildSignature(data, tracker, tab);
 		if (next == signature && drawnHeight >= 0)
 			return;
 		signature = next;
+		styleTabs(tab);
 		var values:Array<String> = [
 			formatInt(data.gold),
 			formatInt(data.xp),
@@ -104,7 +131,7 @@ class Panel extends Sprite {
 		];
 		for (i in 0...valueFields.length)
 			setText(valueFields[i], values[i]);
-		setText(day, dayLabel(data));
+		setText(day, headerLabel(data.day, tab));
 		var items = showItems(data, tracker);
 		if (tracker.active()) {
 			setText(sectionTitle, "THIS RUN");
@@ -188,6 +215,13 @@ class Panel extends Sprite {
 		day.x = WIDTH - PAD - 78;
 		day.y = 6;
 		day.width = 78;
+		for (i in 0...tabs.length) {
+			tabs[i].x = PAD + TAB_WIDTH * i;
+			// Below the drag strip: a click there is a tab click, never the start of a drag.
+			tabs[i].y = HEADER;
+			tabs[i].width = TAB_WIDTH;
+		}
+		y += TAB_ROW;
 		for (i in 0...labelFields.length) {
 			labelFields[i].x = PAD;
 			labelFields[i].y = y;
@@ -225,7 +259,7 @@ class Panel extends Sprite {
 		background.graphics.drawRoundRect(0, 0, WIDTH, panelHeight, 8, 8);
 		background.graphics.endFill();
 		background.graphics.lineStyle(1, COL_BORDER, 0.35);
-		var lineY = HEADER + LINE * labelFields.length + 3;
+		var lineY = HEADER + TAB_ROW + LINE * labelFields.length + 3;
 		background.graphics.moveTo(PAD, lineY);
 		background.graphics.lineTo(WIDTH - PAD, lineY);
 	}
@@ -285,15 +319,15 @@ class Panel extends Sprite {
 		field.setTextFormat(new TextFormat("Arial", 11, color, false));
 	}
 
-	function buildSignature(data:SessionData, tracker:Tracker):String {
+	function buildSignature(data:SessionData, tracker:Tracker, tab:Int):String {
 		var last = data.last;
 		var items = "";
 		if (last != null && last.items != null)
 			for (item in last.items)
 				items += item.name + item.count + ",";
 		return [
+			"" + tab,
 			"" + data.day,
-			"" + data.period + "/" + data.since,
 			"" + data.gold,
 			"" + data.xp,
 			"" + data.chests,
@@ -317,13 +351,30 @@ class Panel extends Sprite {
 		return formatInt(Std.int(data.gold / data.runs)) + " g  " + formatInt(Std.int(data.xp / data.runs)) + " xp";
 	}
 
-	/** The day of a daily total, or the day a session began: the two are told apart at a glance. */
-	public static function dayLabel(data:SessionData):String {
-		if (data.isSession()) {
-			var started = monthDay(data.since == "" ? data.day : data.since);
-			return started == "" ? "manual" : "since " + started;
-		}
-		return monthDay(data.day);
+	/** A tab was clicked: the owner decides which one is on, this only reports it. */
+	public function selectTab(index:Int):Void {
+		if (index < 0 || index >= tabs.length)
+			return;
+		if (onSelectTab != null)
+			onSelectTab(index);
+	}
+
+	public function setOnTabSelected(handler:Int->Void):Void {
+		onSelectTab = handler;
+	}
+
+	/** The tabs are restyled only when the one on changes, not on every refresh. */
+	function styleTabs(tab:Int):Void {
+		if (tab == styledTab)
+			return;
+		styledTab = tab;
+		for (index in 0...tabs.length)
+			tabs[index].setTextFormat(new TextFormat("Arial", 10, index == tab ? COL_TITLE : COL_MUTED, true));
+	}
+
+	/** The header's right side: the day of the totals, or that these are this launch's. */
+	public static function headerLabel(day:String, tab:Int):String {
+		return tab == TAB_SESSION ? "this launch" : monthDay(day);
 	}
 
 	static function monthDay(day:String):String {
