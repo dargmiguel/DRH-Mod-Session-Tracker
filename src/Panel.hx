@@ -56,6 +56,8 @@ class Panel extends Sprite {
 	var chart:Chart;
 	var chartToggle:TextField;
 	var chartOpen:Bool = false;
+	/** The day's totals as of the last refresh, so the chart has data the moment it opens. */
+	var lastDaily:Null<SessionData>;
 	var labelFields:Array<TextField> = [];
 	var valueFields:Array<TextField> = [];
 	var sectionTitle:TextField;
@@ -129,6 +131,7 @@ class Panel extends Sprite {
 
 	/** Pulls what it shows from the tab's totals and the live run. */
 	public function refresh(daily:SessionData, session:SessionData, tracker:Tracker, tab:Int):Void {
+		lastDaily = daily;
 		var data = tab == TAB_SESSION ? session : daily;
 		var next = buildSignature(data, tracker, tab, daily, chartOpen);
 		if (next == signature && drawnHeight >= 0)
@@ -380,6 +383,8 @@ class Panel extends Sprite {
 	function toggleChart():Void {
 		chartOpen = !chartOpen;
 		chart.visible = chartOpen;
+		if (chartOpen && lastDaily != null)
+			chart.setData(lastDaily.history, lastDaily);
 		layout();
 	}
 
