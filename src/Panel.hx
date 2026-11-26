@@ -104,7 +104,7 @@ class Panel extends Sprite {
 		];
 		for (i in 0...valueFields.length)
 			setText(valueFields[i], values[i]);
-		setText(day, dayLabel(data.day));
+		setText(day, dayLabel(data));
 		var items = showItems(data, tracker);
 		if (tracker.active()) {
 			setText(sectionTitle, "THIS RUN");
@@ -293,6 +293,7 @@ class Panel extends Sprite {
 				items += item.name + item.count + ",";
 		return [
 			"" + data.day,
+			"" + data.period + "/" + data.since,
 			"" + data.gold,
 			"" + data.xp,
 			"" + data.chests,
@@ -316,7 +317,16 @@ class Panel extends Sprite {
 		return formatInt(Std.int(data.gold / data.runs)) + " g  " + formatInt(Std.int(data.xp / data.runs)) + " xp";
 	}
 
-	static function dayLabel(day:String):String {
+	/** The day of a daily total, or the day a session began: the two are told apart at a glance. */
+	public static function dayLabel(data:SessionData):String {
+		if (data.isSession()) {
+			var started = monthDay(data.since == "" ? data.day : data.since);
+			return started == "" ? "manual" : "since " + started;
+		}
+		return monthDay(data.day);
+	}
+
+	static function monthDay(day:String):String {
 		var parts = day.split("-");
 		if (parts.length < 3)
 			return "";

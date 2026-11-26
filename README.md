@@ -1,13 +1,14 @@
 # Session Tracker
 
-A [Dungeon Rampage Haxe](https://github.com/Tutez64/Dungeon-Rampage-Haxe) mod that adds up what a day of playing earned — gold, XP, chests, runs, floors and time — and keeps the total across runs in a file of its own. It runs alongside [Dungeon Minimap](https://github.com/Drandoxy/DRH-Mod-Dungeon-Minimap) and does not depend on it.
+A [Dungeon Rampage Haxe](https://github.com/Tutez64/Dungeon-Rampage-Haxe) mod that adds up what a day, or a manual session, of playing earned — gold, XP, chests, runs, floors and time — and keeps the total across runs in a file of its own. It runs alongside [Dungeon Minimap](https://github.com/Drandoxy/DRH-Mod-Dungeon-Minimap) and does not depend on it.
 
 <!-- drh:show -->
-A small panel in the bottom-left corner of the screen shows the day's totals: gold and XP earned inside dungeons, chests opened, runs, floors, time played and the average gold and XP of a run, plus the run in progress or the last one and the items it added to your inventory, with legendaries in orange.
+A small panel in the bottom-left corner of the screen shows the totals: gold and XP earned inside dungeons, chests opened, runs, floors, time played and the average gold and XP of a run, plus the run in progress or the last one and the items it added to your inventory, with legendaries in orange.
 
-- **Ctrl + Shift + T** shows or hides the panel, the way the Dungeon Minimap uses Ctrl + Shift + M. **F3** clears the day's totals (the previous days stay in the file); F6, F7 and F9 are left to the mods that use them.
+- **Ctrl + Shift + T** shows or hides the panel, the way the Dungeon Minimap uses Ctrl + Shift + M. **F3** clears the totals; in a manual session it ends that session and starts a new one. F6, F7 and F9 are left to the mods that use them.
 - Drag the panel by its header to move it.
-- The totals are kept in `session.json` in the mod's data folder. A new calendar day starts a new session and keeps the earlier ones as history.
+- **Session period** in the game's Settings (the MODS tab), under Session Tracker: **Daily** ends the totals at midnight and keeps the earlier days as history, **Manual** keeps adding up across days until F3, and the panel's header shows the day the session began. Switching moves the totals you already have into the new period instead of throwing them away.
+- The totals are kept in `session.json` in the mod's data folder, with the days and sessions before it as history.
 
 Gold counts only what was earned inside the dungeon: the balance is sampled when the first floor loads, so shopping in town is never added to it. XP is the end-of-dungeon report's total, or the XP orbs picked up when the game sends no report. Chests are the treasure the party collected, and every chest counts for the whole party.
 

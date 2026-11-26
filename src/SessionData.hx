@@ -1,18 +1,26 @@
 package mods.session_tracker;
 
 /**
- * The session of one local calendar day, plus the days before it.
+ * The totals of one session, plus the ones before it.
  *
- * `session.json` holds this object flat: `day` says which day the totals are for, and a file for another day is
- * archived into `history` and reset when it is loaded. Nothing here throws on a malformed file: every field falls
- * back to its default.
+ * `session.json` holds this object flat: `period` says whether the totals end with the calendar day or with the
+ * next manual reset, `day` is the day they are for, and a daily file from another day is archived into `history`
+ * and reset when it is loaded. Nothing here throws on a malformed file: every field falls back to its default.
  */
 class SessionData {
-	public static inline final FILE_VERSION = 1;
+	public static inline final FILE_VERSION = 2;
 	public static inline final HISTORY_LIMIT = 60;
 	public static inline final ITEM_LIMIT = 60;
+	/** The totals are of one local calendar day: a new day archives them and starts empty. */
+	public static inline final DAILY = "daily";
+	/** The totals run from one reset to the next, across days. */
+	public static inline final SESSION = "session";
 
 	public var day:String = "";
+	/** `DAILY` or `SESSION`: what ends the totals. */
+	public var period:String = DAILY;
+	/** In a session, the day it began; empty in daily mode. */
+	public var since:String = "";
 	public var gold:Int = 0;
 	public var xp:Int = 0;
 	public var chests:Int = 0;
@@ -39,21 +47,67 @@ class SessionData {
 
 	/** Archives a day that ended and starts `day` empty; a day with nothing in it is not archived. */
 	public function startDay(day:String):Void {
-		if (this.day != "" && (runs > 0 || gold > 0 || xp > 0 || chests > 0 || ms > 0)) {
-			var totals = new DayTotals();
-			totals.day = this.day;
-			totals.gold = gold;
-			totals.xp = xp;
-			totals.chests = chests;
-			totals.runs = runs;
-			totals.floors = floors;
-			totals.ms = ms;
-			history.push(totals);
-			if (history.length > HISTORY_LIMIT)
-				history.splice(0, history.length - HISTORY_LIMIT);
-		}
+		archiveCurrent();
 		resetToday();
 		this.day = day;
+		since = "";
+		period = DAILY;
+	}
+
+	/** Pushes the totals so far to the history, unless there is nothing in them. */
+	public function archiveCurrent():Void {
+		if (day == "" || !touched())
+			return;
+		var totals = new DayTotals();
+		totals.day = day;
+		totals.session = isSession();
+		totals.gold = gold;
+		totals.xp = xp;
+		totals.chests = chests;
+		totals.runs = runs;
+		totals.floors = floors;
+		totals.ms = ms;
+		history.push(totals);
+		if (history.length > HISTORY_LIMIT)
+			history.splice(0, history.length - HISTORY_LIMIT);
+	}
+
+	/** Switches to a session where it is: the totals so far are its first part, and midnight no longer ends it. */
+	public function beginSession(day:String):Void {
+		if (isSession())
+			return;
+		period = SESSION;
+		since = day == "" ? (this.day == "" ? localDay() : this.day) : day;
+	}
+
+	/** Back to daily: a session that outlived its first day is archived, and today starts empty. */
+	public function endSession(today:String):Void {
+		if (!isSession())
+			return;
+		if (day != today) {
+			// Archived while it is still a session, so the history marks it as one.
+			archiveCurrent();
+			resetToday();
+			day = today;
+		}
+		period = DAILY;
+		since = "";
+	}
+
+	/** The reset key in a session: this one goes to the history and a new one starts today. */
+	public function restartSession(today:String):Void {
+		archiveCurrent();
+		resetToday();
+		day = today;
+		since = today;
+	}
+
+	public function isSession():Bool {
+		return period == SESSION;
+	}
+
+	function touched():Bool {
+		return runs > 0 || gold > 0 || xp > 0 || chests > 0 || ms > 0;
 	}
 
 	public function addItem(entry:ItemEntry):Void {
@@ -81,6 +135,8 @@ class SessionData {
 		return {
 			version: FILE_VERSION,
 			day: day,
+			period: period,
+			since: since,
 			gold: gold,
 			xp: xp,
 			chests: chests,
@@ -98,6 +154,8 @@ class SessionData {
 		if (raw == null)
 			return data;
 		data.day = str(raw, "day");
+		data.period = str(raw, "period") == SESSION ? SESSION : DAILY;
+		data.since = str(raw, "since");
 		data.gold = count(raw, "gold");
 		data.xp = count(raw, "xp");
 		data.chests = count(raw, "chests");
@@ -178,6 +236,7 @@ class SessionData {
 		for (totals in history) {
 			out.push({
 				day: totals.day,
+				session: totals.session,
 				gold: totals.gold,
 				xp: totals.xp,
 				chests: totals.chests,
@@ -199,6 +258,7 @@ class SessionData {
 				continue;
 			var totals = new DayTotals();
 			totals.day = str(entry, "day");
+			totals.session = flag(entry, "session");
 			totals.gold = count(entry, "gold");
 			totals.xp = count(entry, "xp");
 			totals.chests = count(entry, "chests");

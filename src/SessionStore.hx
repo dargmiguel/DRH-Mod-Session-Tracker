@@ -16,8 +16,12 @@ class SessionStore {
 		this.log = log;
 	}
 
-	/** The session of today: an older file is archived into its history and reset to the current day. */
-	public function load():SessionData {
+	/**
+	 * The stored totals, reconciled with the chosen period: a daily file from another day rolls to today, a
+	 * session file keeps counting across days, and a file whose mode the player changed while the game was
+	 * closed is moved to the chosen one.
+	 */
+	public function load(preferred:String):SessionData {
 		var loaded:Null<SessionData> = null;
 		try {
 			if (sys.FileSystem.exists(path)) {
@@ -31,10 +35,28 @@ class SessionStore {
 		}
 		var data = loaded == null ? new SessionData() : loaded;
 		var today = SessionData.localDay();
-		if (data.day != today) {
-			data.startDay(today);
-			save(data);
+		var changed = false;
+		if (data.day == "") {
+			data.day = today;
+			changed = true;
 		}
+		if (data.isSession()) {
+			if (preferred != SessionData.SESSION) {
+				data.endSession(today);
+				changed = true;
+			}
+		} else {
+			if (data.day != today) {
+				data.startDay(today);
+				changed = true;
+			}
+			if (preferred == SessionData.SESSION) {
+				data.beginSession(data.day);
+				changed = true;
+			}
+		}
+		if (changed)
+			save(data);
 		return data;
 	}
 

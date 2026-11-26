@@ -14,7 +14,10 @@ import distributedObjects.DistributedDungeonSummary;
 import distributedObjects.PlayerGameObjectOwner;
 
 /**
- * Session Tracker: what the day added up to, kept across runs in `context.data`.
+ * Session Tracker: what a day, or a manual session, added up to, kept across runs in `context.data`.
+ *
+ * The period is an option in the game's settings: `daily` ends the totals at midnight and keeps the earlier days
+ * as history, `session` ends them only at the reset key. Switching moves the totals, it does not restart them.
  *
  * Gold and XP come from the live game through `context.core`, so the mod is `extends`; the `api` alone has the
  * account's balance but no per-run gain. Every game object read through the core is guarded, so a DRH update that
@@ -38,19 +41,31 @@ class Main extends Mod {
 
 	override public function init(context:Context):Void {
 		ctx = context;
+		var preferred = SessionData.DAILY;
+		try {
+			var option = context.settings.choice("period", "Session period", "", [
+				{value: SessionData.DAILY, label: "Daily"},
+				{value: SessionData.SESSION, label: "Manual"}
+			], SessionData.DAILY);
+			preferred = option.value;
+			subscriptions.push(option.onChange(changePeriod));
+		} catch (error:Dynamic) {
+			log("session period option unavailable, staying daily: " + Std.string(error));
+		}
 		store = new SessionStore(context.data, log);
-		data = store.load();
+		data = store.load(preferred);
 		tracker = new Tracker(context, data);
 		// Ctrl+Shift+T, as the Dungeon Minimap uses Ctrl+Shift+M. F6, F7 and F9 belong to Weapon Rater and
 		// Weapon Lock, and a key binds once, so the reset keeps F3.
 		context.keys.action("togglePanel", "Session panel", "Show or hide the session tracker panel.", Keyboard.T, true, true)
 			.onPress(togglePanel);
-		context.keys.action("resetSession", "Reset session", "Clear today's totals; the days before stay in the file.",
-			Keyboard.F3).onPress(resetSession);
+		context.keys.action("resetSession", "Reset session",
+			"Clear the totals; in a manual session this one ends here and a new one starts.", Keyboard.F3).onPress(resetSession);
 		subscriptions.push(context.onFloorEnter(onFloorEnter));
 		subscriptions.push(context.onTownEnter(onTownEnter));
 		subscribeCore();
-		log("session " + data.day + ": " + data.runs + " runs, " + data.gold + " gold, " + data.xp + " xp");
+		log((data.isSession() ? "session since " + data.since : "day " + data.day) + ": " + data.runs + " runs, " + data.gold
+			+ " gold, " + data.xp + " xp");
 	}
 
 	override public function ready(context:Context):Void {
@@ -108,8 +123,11 @@ class Main extends Mod {
 		}
 	}
 
-	/** A session that runs past midnight ends there: the finished day goes to the history. */
+	/** In daily mode a session that runs past midnight ends there: the finished day goes to the history. */
 	function checkDay():Void {
+		// A manual session runs past midnight; the daily one ends there.
+		if (data.isSession())
+			return;
 		var today = SessionData.localDay();
 		if (today == data.day)
 			return;
@@ -198,14 +216,37 @@ class Main extends Mod {
 
 	function resetSession():Void {
 		try {
-			data.resetToday();
+			var today = SessionData.localDay();
+			if (data.isSession())
+				data.restartSession(today);
+			else
+				data.resetToday();
 			tracker.restartRun();
 			snapshot = InventoryDiff.take(ctx, logOnce);
 			store.save(data);
 			refresh();
-			log("session reset for " + data.day);
+			log(data.isSession() ? "session restarted " + today : "session reset for " + data.day);
 		} catch (error:Dynamic) {
 			log("reset: " + Std.string(error));
+		}
+	}
+
+	/** The player's choice in the menu: the totals so far are moved, not thrown away. */
+	function changePeriod(value:String):Void {
+		try {
+			var today = SessionData.localDay();
+			if (value == SessionData.SESSION)
+				data.beginSession(data.day == "" ? today : data.day);
+			else {
+				data.endSession(today);
+				if (data.day != today)
+					data.startDay(today);
+			}
+			store.save(data);
+			refresh();
+			log("period now " + data.period);
+		} catch (error:Dynamic) {
+			log("period change: " + Std.string(error));
 		}
 	}
 
