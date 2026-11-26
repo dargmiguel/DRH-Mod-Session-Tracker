@@ -41,8 +41,9 @@ class Main extends Mod {
 		store = new SessionStore(context.data, log);
 		data = store.load();
 		tracker = new Tracker(context, data);
-		// F4 and F3: F6, F7 and F9 are taken by Weapon Rater and Weapon Lock, and a key binds once.
-		context.keys.action("togglePanel", "Session panel", "Show or hide the session tracker panel.", Keyboard.F4)
+		// Ctrl+Shift+T, as the Dungeon Minimap uses Ctrl+Shift+M. F6, F7 and F9 belong to Weapon Rater and
+		// Weapon Lock, and a key binds once, so the reset keeps F3.
+		context.keys.action("togglePanel", "Session panel", "Show or hide the session tracker panel.", Keyboard.T, true, true)
 			.onPress(togglePanel);
 		context.keys.action("resetSession", "Reset session", "Clear today's totals; the days before stay in the file.",
 			Keyboard.F3).onPress(resetSession);
