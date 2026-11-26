@@ -1,0 +1,10 @@
+{
+  "id": "session_tracker",
+  "name": "Session Tracker",
+  "description": "What the mod does, in one line.",
+  "version": "0.1.0",
+  "author": "Astra",
+  "api": "1.5",
+  "entry": "Main",
+  "uses": []
+}
