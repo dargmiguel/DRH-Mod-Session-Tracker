@@ -53,6 +53,9 @@ class Panel extends Sprite {
 	var tabs:Array<TextField> = [];
 	var onSelectTab:Null<Int->Void>;
 	var styledTab:Int = -1;
+	var chart:Chart;
+	var chartToggle:TextField;
+	var chartOpen:Bool = false;
 	var labelFields:Array<TextField> = [];
 	var valueFields:Array<TextField> = [];
 	var sectionTitle:TextField;
@@ -88,6 +91,18 @@ class Panel extends Sprite {
 			tabs.push(field);
 			addChild(field);
 		}
+		chartToggle = makeField(10, COL_MUTED, true, TextFormatAlign.RIGHT);
+		chartToggle.text = "CHART";
+		chartToggle.mouseEnabled = true;
+		chartToggle.addEventListener(MouseEvent.CLICK, function(event:MouseEvent) {
+			if (event != null)
+				event.stopPropagation();
+			toggleChart();
+		});
+		addChild(chartToggle);
+		chart = new Chart(WIDTH - PAD * 2);
+		chart.visible = false;
+		addChild(chart);
 		var colors:Array<Int> = [COL_GOLD, COL_XP, COL_CHEST, COL_TEXT, COL_TEXT, COL_TEXT, COL_MUTED];
 		for (i in 0...LABELS.length) {
 			var label = makeField(12, COL_MUTED, false, TextFormatAlign.LEFT);
@@ -115,11 +130,12 @@ class Panel extends Sprite {
 	/** Pulls what it shows from the tab's totals and the live run. */
 	public function refresh(daily:SessionData, session:SessionData, tracker:Tracker, tab:Int):Void {
 		var data = tab == TAB_SESSION ? session : daily;
-		var next = buildSignature(data, tracker, tab);
+		var next = buildSignature(data, tracker, tab, daily, chartOpen);
 		if (next == signature && drawnHeight >= 0)
 			return;
 		signature = next;
 		styleTabs(tab);
+		chart.setData(daily.history, daily);
 		var values:Array<String> = [
 			formatInt(data.gold),
 			formatInt(data.xp),
@@ -221,6 +237,9 @@ class Panel extends Sprite {
 			tabs[i].y = HEADER;
 			tabs[i].width = TAB_WIDTH;
 		}
+		chartToggle.x = WIDTH - PAD - 44;
+		chartToggle.y = HEADER;
+		chartToggle.width = 44;
 		y += TAB_ROW;
 		for (i in 0...labelFields.length) {
 			labelFields[i].x = PAD;
@@ -243,6 +262,11 @@ class Panel extends Sprite {
 			itemFields[i].y = y;
 			itemFields[i].width = WIDTH - PAD * 2;
 			y += LINE;
+		}
+		if (chartOpen) {
+			chart.x = PAD;
+			chart.y = y + 3;
+			y += Chart.HEIGHT + 3;
 		}
 		panelHeight = y + 6;
 		if (panelHeight != drawnHeight) {
@@ -319,7 +343,7 @@ class Panel extends Sprite {
 		field.setTextFormat(new TextFormat("Arial", 11, color, false));
 	}
 
-	function buildSignature(data:SessionData, tracker:Tracker, tab:Int):String {
+	function buildSignature(data:SessionData, tracker:Tracker, tab:Int, daily:SessionData, chartOpen:Bool):String {
 		var last = data.last;
 		var items = "";
 		if (last != null && last.items != null)
@@ -340,7 +364,8 @@ class Panel extends Sprite {
 			"" + tracker.liveChests(),
 			"" + tracker.liveMs(),
 			last == null ? "" : "" + last.gold + "/" + last.xp + "/" + last.chests + "/" + last.ms,
-			items
+			items,
+			"" + (chartOpen ? 1 : 0) + daily.history.length + "/" + daily.gold + "/" + daily.xp + "/" + daily.chests
 		].join("|");
 	}
 
@@ -349,6 +374,13 @@ class Panel extends Sprite {
 		if (data.runs == 0)
 			return "none yet";
 		return formatInt(Std.int(data.gold / data.runs)) + " g  " + formatInt(Std.int(data.xp / data.runs)) + " xp";
+	}
+
+	/** The calendar button: the chart opens under the items and closes again. */
+	function toggleChart():Void {
+		chartOpen = !chartOpen;
+		chart.visible = chartOpen;
+		layout();
 	}
 
 	/** A tab was clicked: the owner decides which one is on, this only reports it. */

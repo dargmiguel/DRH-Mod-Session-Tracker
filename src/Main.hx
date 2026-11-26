@@ -37,7 +37,7 @@ class Main extends Mod {
 	var nextTick:Int = 0;
 	var shown:Bool = true;
 	/** Which tab the panel shows: the day's totals or this launch's. */
-	var tab:Int = Panel.TAB_DAY;
+	var tab:Int = Panel.TAB_SESSION;
 	var logged:Map<String, Bool> = new Map();
 	var loggingBroken:Bool = false;
 

@@ -7,7 +7,8 @@ A small panel in the bottom-left corner of the screen shows the totals: gold and
 
 - **Ctrl + Shift + T** shows or hides the panel, the way the Dungeon Minimap uses Ctrl + Shift + M. **F3** clears the totals of the tab on screen. F6, F7 and F9 are left to the mods that use them.
 - Drag the panel by its header to move it.
-- Two tabs, switched by clicking them: **TODAY** is the calendar day, kept in `session.json` in the mod's data folder, rolled at midnight with the earlier days as history; **SESSION** is this launch, from zero every time the game opens and never written to the file. Both add up the same runs, so the session is the part of the day that this launch earned.
+- Two tabs, switched by clicking them: **SESSION** (the one the panel opens on) is this launch, from zero every time the game opens and never written to the file; **TODAY** is the calendar day, kept in `session.json` in the mod's data folder, rolled at midnight with the earlier days as history. Both add up the same runs, so the session is the part of the day that this launch earned.
+- **CHART**, at the right of the tab row, opens a line chart of the days in the file. Click the metric's name to cycle GOLD, XP and CHESTS, and 7D, 30D or ALL for the range; the highest day of the range reaches the top, and a day without an entry leaves a gap in the line.
 
 Gold counts only what was earned inside the dungeon: the balance is sampled when the first floor loads, so shopping in town is never added to it. XP is the end-of-dungeon report's total, or the XP orbs picked up when the game sends no report. Chests are the treasure the party collected, and every chest counts for the whole party.
 
